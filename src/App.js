@@ -2,8 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 
 const CAPTCHA_SITE_KEY = process.env.REACT_APP_YANDEX_CAPTCHA_SITEKEY || '';
-const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || '';
-const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
+const CLOUD_API_URL = process.env.REACT_APP_CLOUD_API_URL || '/.netlify/functions/school-state';
 const SUPABASE_STATE_ID = process.env.REACT_APP_SUPABASE_STATE_ID || 'music-school-demo';
 const STORAGE_KEY = 'solfejio_music_school_state_v1';
 const CAPTCHA_SESSION_KEY = 'solfejio_captcha_passed';
@@ -124,33 +123,37 @@ function loadLocalState() {
   }
 }
 
-async function loadCloudState() {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+function normalizeSchoolState(data) {
+  const students = Array.isArray(data?.students) ? data.students : [];
+  const subscriptions = Array.isArray(data?.subscriptions) ? data.subscriptions : [];
+  const lessons = Array.isArray(data?.lessons) ? data.lessons : [];
+  return { students, subscriptions, lessons };
+}
 
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/school_states?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=data`, {
+async function loadCloudState(captchaToken) {
+  if (!captchaToken) return null;
+
+  const response = await fetch(`${CLOUD_API_URL}?id=${encodeURIComponent(SUPABASE_STATE_ID)}`, {
     headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      'x-captcha-token': captchaToken,
     },
   });
 
+  if (response.status === 404) return { data: null, sessionToken: '' };
   if (!response.ok) throw new Error('Не удалось загрузить данные из Supabase');
-  const rows = await response.json();
-  return rows[0]?.data || null;
+  return response.json();
 }
 
-async function saveCloudState(data) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return 'local';
+async function saveCloudState(data, cloudSessionToken) {
+  if (!cloudSessionToken) return 'local';
 
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/school_states?on_conflict=id`, {
+  const response = await fetch(CLOUD_API_URL, {
     method: 'POST',
     headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates',
+      'x-cloud-session-token': cloudSessionToken,
     },
-    body: JSON.stringify({ id: SUPABASE_STATE_ID, data, updated_at: new Date().toISOString() }),
+    body: JSON.stringify({ id: SUPABASE_STATE_ID, data }),
   });
 
   if (!response.ok) throw new Error('Не удалось сохранить данные в Supabase');
@@ -171,9 +174,10 @@ function App() {
   const [lessonForm, setLessonForm] = useState({ studentId: starterStudents[0].id, subscriptionId: starterSubscriptions[0].id, date: today, time: '17:00', topic: '' });
   const [syncStatus, setSyncStatus] = useState('Загрузка данных...');
   const [hydrated, setHydrated] = useState(false);
+  const [cloudSessionToken, setCloudSessionToken] = useState('');
 
   const stateSnapshot = useMemo(() => ({ students, subscriptions, lessons }), [students, subscriptions, lessons]);
-  const cloudEnabled = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+  const cloudEnabled = Boolean(cloudSessionToken || captchaToken);
 
   const activeSubscriptions = subscriptions.filter((subscription) => subscription.status === 'Активен');
   const income = subscriptions.reduce((sum, subscription) => sum + Number(subscription.price || 0), 0);
@@ -181,36 +185,51 @@ function App() {
   const completedLessons = lessons.filter((lesson) => lesson.status === 'Проведен');
 
   useEffect(() => {
-    const localState = loadLocalState();
-    setStudents(localState.students || []);
-    setSubscriptions(localState.subscriptions || []);
-    setLessons(localState.lessons || []);
-    setSubscriptionForm((current) => ({ ...current, studentId: localState.students?.[0]?.id || '' }));
-    setLessonForm((current) => ({ ...current, studentId: localState.students?.[0]?.id || '', subscriptionId: localState.subscriptions?.[0]?.id || '' }));
+    const applyState = (nextState) => {
+      const normalized = normalizeSchoolState(nextState);
+      setStudents(normalized.students);
+      setSubscriptions(normalized.subscriptions);
+      setLessons(normalized.lessons);
+      setSubscriptionForm((current) => ({ ...current, studentId: normalized.students[0]?.id || '' }));
+      setLessonForm((current) => ({
+        ...current,
+        studentId: normalized.students[0]?.id || '',
+        subscriptionId: normalized.subscriptions.find((subscription) => subscription.studentId === normalized.students[0]?.id)?.id || '',
+      }));
+    };
 
-    loadCloudState()
+    applyState(loadLocalState());
+
+    if (!captchaPassed) {
+      setSyncStatus('Работает локальное демо-хранилище');
+      setHydrated(true);
+      return;
+    }
+
+    loadCloudState(captchaToken)
       .then((cloudState) => {
-        if (cloudState) {
-          setStudents(cloudState.students || []);
-          setSubscriptions(cloudState.subscriptions || []);
-          setLessons(cloudState.lessons || []);
-          setSyncStatus('Данные загружены из Supabase');
+        if (cloudState?.sessionToken) {
+          setCloudSessionToken(cloudState.sessionToken);
+        }
+        if (cloudState?.data) {
+          applyState(cloudState.data);
+          setSyncStatus('Данные загружены из Supabase через защищенную функцию');
         } else {
-          setSyncStatus(cloudEnabled ? 'Supabase подключен, используется новая база' : 'Работает локальное демо-хранилище');
+          setSyncStatus(captchaToken ? 'Supabase подключен, используется новая база' : 'Работает локальное демо-хранилище');
         }
       })
       .catch(() => setSyncStatus('Supabase недоступен, включен локальный резерв'))
       .finally(() => setHydrated(true));
-  }, [cloudEnabled]);
+  }, [captchaPassed, captchaToken]);
 
   useEffect(() => {
     if (!hydrated) return;
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stateSnapshot));
-    saveCloudState(stateSnapshot)
+    saveCloudState(stateSnapshot, cloudSessionToken)
       .then((target) => setSyncStatus(target === 'cloud' ? 'Сохранено в Supabase' : 'Сохранено в браузере'))
       .catch(() => setSyncStatus('Supabase недоступен, изменения сохранены в браузере'));
-  }, [hydrated, stateSnapshot]);
+  }, [cloudSessionToken, hydrated, stateSnapshot]);
 
   useEffect(() => {
     if (!CAPTCHA_SITE_KEY || captchaPassed) return undefined;
@@ -277,7 +296,7 @@ function App() {
 
   function addSubscription(event) {
     event.preventDefault();
-    if (!subscriptionForm.studentId) return;
+    if (!students.some((student) => student.id === subscriptionForm.studentId)) return;
 
     const selectedPlan = plans.find((plan) => plan.name === subscriptionForm.planName) || plans[0];
     const start = new Date(subscriptionForm.startDate || today);
@@ -303,7 +322,8 @@ function App() {
 
   function addLesson(event) {
     event.preventDefault();
-    if (!lessonForm.studentId || !lessonForm.topic.trim()) return;
+    if (!students.some((student) => student.id === lessonForm.studentId) || !lessonForm.topic.trim()) return;
+    if (lessonForm.subscriptionId && !subscriptions.some((subscription) => subscription.id === lessonForm.subscriptionId && subscription.studentId === lessonForm.studentId)) return;
 
     const lesson = {
       id: createId('lesson'),
