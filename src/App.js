@@ -1,575 +1,637 @@
-import React, { useState, useEffect } from 'react';
-import bridge from '@vkontakte/vk-bridge';
-import {
-    AppRoot,
-    View,
-    Panel,
-    PanelHeader,
-    Group,
-    Cell,
-    Button,
-    Div,
-    ScreenSpinner,
-    Epic,
-    Tabbar,
-    TabbarItem,
-    SimpleCell,
-    Avatar,
-    Header,
-    Spacing,
-    CardGrid,
-    Card,
-    Counter,
-    Alert,
-    FormItem,
-    Input,
-    ModalPage,
-    ModalPageHeader,
-    ModalRoot,
-    FormLayoutGroup,
-    Select,
-    PanelHeaderButton
-} from '@vkontakte/vkui';
-import { 
-    Icon28UsersOutline, 
-    Icon28NewsfeedOutline, 
-    Icon28AddOutline,
-    Icon28UserOutline,
-    Icon28MusicOutline,
-    Icon28CancelOutline
-} from '@vkontakte/icons';
-import '@vkontakte/vkui/dist/vkui.css';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import './App.css';
 
-// Типы услуг студии
-const SERVICE_TYPES = [
-    { value: 'recording', label: '🎙️ Запись вокала', price: 1500, color: '#4BB34B' },
-    { value: 'mixing', label: '🎚️ Сведение', price: 5000, color: '#4B8EF5' },
-    { value: 'mastering', label: '✨ Мастеринг', price: 3000, color: '#FF9F43' },
-    { value: 'rehearsal', label: '🥁 Репетиция', price: 800, color: '#A29BFE' },
-    { value: 'instrumental', label: '🎸 Инструментал', price: 2000, color: '#E84393' },
-    { value: 'consultation', label: '💡 Консультация', price: 1000, color: '#00B894' }
+const CAPTCHA_SITE_KEY = process.env.REACT_APP_YANDEX_CAPTCHA_SITEKEY || '';
+const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL || '';
+const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
+const SUPABASE_STATE_ID = process.env.REACT_APP_SUPABASE_STATE_ID || 'music-school-demo';
+const STORAGE_KEY = 'solfejio_music_school_state_v1';
+const CAPTCHA_SESSION_KEY = 'solfejio_captcha_passed';
+
+const starterStudents = [
+  {
+    id: 'student-anna',
+    name: 'Анна Волкова',
+    age: '12',
+    phone: '+7 900 111-22-33',
+    instrument: 'Фортепиано',
+    teacher: 'Мария Орлова',
+    status: 'Активен',
+    note: 'Готовится к школьному концерту',
+    createdAt: '2026-05-01',
+  },
+  {
+    id: 'student-maksim',
+    name: 'Максим Егоров',
+    age: '15',
+    phone: '+7 901 555-17-88',
+    instrument: 'Гитара',
+    teacher: 'Илья Соколов',
+    status: 'Активен',
+    note: 'Любит импровизацию и рок-аранжировки',
+    createdAt: '2026-05-03',
+  },
 ];
 
+const starterSubscriptions = [
+  {
+    id: 'sub-anna-may',
+    studentId: 'student-anna',
+    planName: 'Индивидуальный стандарт',
+    totalLessons: 8,
+    remainingLessons: 5,
+    price: 9600,
+    startDate: '2026-05-01',
+    endDate: '2026-06-01',
+    status: 'Активен',
+  },
+  {
+    id: 'sub-maksim-may',
+    studentId: 'student-maksim',
+    planName: 'Гитара интенсив',
+    totalLessons: 12,
+    remainingLessons: 9,
+    price: 14400,
+    startDate: '2026-05-04',
+    endDate: '2026-06-04',
+    status: 'Активен',
+  },
+];
+
+const starterLessons = [
+  {
+    id: 'lesson-1',
+    studentId: 'student-anna',
+    subscriptionId: 'sub-anna-may',
+    date: '2026-05-21',
+    time: '16:00',
+    topic: 'Подготовка этюда и гаммы',
+    status: 'Запланирован',
+  },
+  {
+    id: 'lesson-2',
+    studentId: 'student-maksim',
+    subscriptionId: 'sub-maksim-may',
+    date: '2026-05-22',
+    time: '18:30',
+    topic: 'Ритм, бой и разбор песни',
+    status: 'Запланирован',
+  },
+];
+
+const plans = [
+  { name: 'Пробный урок', lessons: 1, price: 900 },
+  { name: 'Индивидуальный стандарт', lessons: 8, price: 9600 },
+  { name: 'Группа солфеджио', lessons: 8, price: 6400 },
+  { name: 'Интенсив', lessons: 12, price: 14400 },
+];
+
+const emptyStudent = {
+  name: '',
+  age: '',
+  phone: '',
+  instrument: 'Фортепиано',
+  teacher: '',
+  note: '',
+};
+
+const today = new Date().toISOString().slice(0, 10);
+
+const initialState = {
+  students: starterStudents,
+  subscriptions: starterSubscriptions,
+  lessons: starterLessons,
+};
+
+function createId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function formatMoney(value) {
+  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(value);
+}
+
+function getStudentName(students, studentId) {
+  return students.find((student) => student.id === studentId)?.name || 'Ученик не найден';
+}
+
+function loadLocalState() {
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : initialState;
+  } catch (error) {
+    return initialState;
+  }
+}
+
+async function loadCloudState() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/school_states?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=data`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+  });
+
+  if (!response.ok) throw new Error('Не удалось загрузить данные из Supabase');
+  const rows = await response.json();
+  return rows[0]?.data || null;
+}
+
+async function saveCloudState(data) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return 'local';
+
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/school_states?on_conflict=id`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates',
+    },
+    body: JSON.stringify({ id: SUPABASE_STATE_ID, data, updated_at: new Date().toISOString() }),
+  });
+
+  if (!response.ok) throw new Error('Не удалось сохранить данные в Supabase');
+  return 'cloud';
+}
+
 function App() {
-    // Авторизация
-    const [isAuth, setIsAuth] = useState(false);
-    const [user, setUser] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [authError, setAuthError] = useState(null);
-    
-    // Данные CRM
-    const [activeTab, setActiveTab] = useState('dashboard');
-    const [modal, setModal] = useState(null);
-    const [showConfirm, setShowConfirm] = useState(false);
-    const [confirmData, setConfirmData] = useState(null);
-    const [clients, setClients] = useState([]);
-    const [bookings, setBookings] = useState([]);
-    const [stats, setStats] = useState({
-        totalClients: 0,
-        activeBookings: 0,
-        totalRevenue: 0,
-        completedBookings: 0
-    });
+  const captchaRef = useRef(null);
+  const [captchaPassed, setCaptchaPassed] = useState(() => window.sessionStorage.getItem(CAPTCHA_SESSION_KEY) === 'true');
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaReady, setCaptchaReady] = useState(!CAPTCHA_SITE_KEY);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [students, setStudents] = useState(initialState.students);
+  const [subscriptions, setSubscriptions] = useState(initialState.subscriptions);
+  const [lessons, setLessons] = useState(initialState.lessons);
+  const [studentForm, setStudentForm] = useState(emptyStudent);
+  const [subscriptionForm, setSubscriptionForm] = useState({ studentId: starterStudents[0].id, planName: plans[1].name, startDate: today });
+  const [lessonForm, setLessonForm] = useState({ studentId: starterStudents[0].id, subscriptionId: starterSubscriptions[0].id, date: today, time: '17:00', topic: '' });
+  const [syncStatus, setSyncStatus] = useState('Загрузка данных...');
+  const [hydrated, setHydrated] = useState(false);
 
-    // Авторизация через VK
-    useEffect(() => {
-        const initAuth = async () => {
-            try {
-                console.log('Инициализация VK Bridge...');
-                await bridge.send('VKWebAppInit');
-                
-                console.log('Получение данных пользователя...');
-                const userData = await bridge.send('VKWebAppGetUserInfo');
-                
-                console.log('Авторизация успешна:', userData.first_name);
-                setUser(userData);
-                await loadCRMData(userData.id);
-                setIsAuth(true);
-            } catch (error) {
-                console.error('Ошибка авторизации:', error);
-                setAuthError('Не удалось авторизоваться. Попробуйте перезапустить приложение.');
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        initAuth();
-    }, []);
+  const stateSnapshot = useMemo(() => ({ students, subscriptions, lessons }), [students, subscriptions, lessons]);
+  const cloudEnabled = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
-    // Загрузка данных
-    const loadCRMData = async (userId) => {
-        try {
-            const storageData = await bridge.send('VKWebAppStorageGet', {
-                keys: [`crm_clients_${userId}`, `crm_bookings_${userId}`]
-            });
+  const activeSubscriptions = subscriptions.filter((subscription) => subscription.status === 'Активен');
+  const income = subscriptions.reduce((sum, subscription) => sum + Number(subscription.price || 0), 0);
+  const plannedLessons = lessons.filter((lesson) => lesson.status === 'Запланирован');
+  const completedLessons = lessons.filter((lesson) => lesson.status === 'Проведен');
 
-            const clientsItem = storageData.keys.find(k => k.key === `crm_clients_${userId}`);
-            if (clientsItem && clientsItem.value) {
-                setClients(JSON.parse(clientsItem.value));
-            } else {
-                const initialClients = [
-                    { id: 1, name: 'Иван Иванов', phone: '+7 999 123-45-67', email: 'ivan@example.com', totalSpent: 15000, lastVisit: new Date().toISOString() },
-                    { id: 2, name: 'Анна Петрова', phone: '+7 999 234-56-78', email: 'anna@example.com', totalSpent: 8000, lastVisit: new Date().toISOString() },
-                    { id: 3, name: 'Максим Сидоров', phone: '+7 999 345-67-89', email: 'max@example.com', totalSpent: 25000, lastVisit: new Date().toISOString() }
-                ];
-                setClients(initialClients);
-                await bridge.send('VKWebAppStorageSet', { 
-                    key: `crm_clients_${userId}`, 
-                    value: JSON.stringify(initialClients) 
-                });
-            }
+  useEffect(() => {
+    const localState = loadLocalState();
+    setStudents(localState.students || []);
+    setSubscriptions(localState.subscriptions || []);
+    setLessons(localState.lessons || []);
+    setSubscriptionForm((current) => ({ ...current, studentId: localState.students?.[0]?.id || '' }));
+    setLessonForm((current) => ({ ...current, studentId: localState.students?.[0]?.id || '', subscriptionId: localState.subscriptions?.[0]?.id || '' }));
 
-            const bookingsItem = storageData.keys.find(k => k.key === `crm_bookings_${userId}`);
-            if (bookingsItem && bookingsItem.value) {
-                setBookings(JSON.parse(bookingsItem.value));
-            } else {
-                const initialBookings = [
-                    { id: 1, clientId: 1, clientName: 'Иван Иванов', service: 'recording', serviceLabel: 'Запись вокала', price: 1500, date: new Date().toISOString(), status: 'completed', duration: 3 },
-                    { id: 2, clientId: 2, clientName: 'Анна Петрова', service: 'mixing', serviceLabel: 'Сведение', price: 5000, date: new Date().toISOString(), status: 'active', duration: 2 },
-                    { id: 3, clientId: 3, clientName: 'Максим Сидоров', service: 'mastering', serviceLabel: 'Мастеринг', price: 3000, date: new Date().toISOString(), status: 'active', duration: 1 }
-                ];
-                setBookings(initialBookings);
-                await bridge.send('VKWebAppStorageSet', { 
-                    key: `crm_bookings_${userId}`, 
-                    value: JSON.stringify(initialBookings) 
-                });
-            }
-        } catch (err) {
-            console.error('Ошибка загрузки данных:', err);
+    loadCloudState()
+      .then((cloudState) => {
+        if (cloudState) {
+          setStudents(cloudState.students || []);
+          setSubscriptions(cloudState.subscriptions || []);
+          setLessons(cloudState.lessons || []);
+          setSyncStatus('Данные загружены из Supabase');
+        } else {
+          setSyncStatus(cloudEnabled ? 'Supabase подключен, используется новая база' : 'Работает локальное демо-хранилище');
         }
+      })
+      .catch(() => setSyncStatus('Supabase недоступен, включен локальный резерв'))
+      .finally(() => setHydrated(true));
+  }, [cloudEnabled]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stateSnapshot));
+    saveCloudState(stateSnapshot)
+      .then((target) => setSyncStatus(target === 'cloud' ? 'Сохранено в Supabase' : 'Сохранено в браузере'))
+      .catch(() => setSyncStatus('Supabase недоступен, изменения сохранены в браузере'));
+  }, [hydrated, stateSnapshot]);
+
+  useEffect(() => {
+    if (!CAPTCHA_SITE_KEY || captchaPassed) return undefined;
+
+    const renderCaptcha = () => {
+      if (!window.smartCaptcha || !captchaRef.current || captchaToken) return;
+      setCaptchaReady(true);
+      window.smartCaptcha.render(captchaRef.current, {
+        sitekey: CAPTCHA_SITE_KEY,
+        callback: (token) => setCaptchaToken(token),
+      });
     };
 
-    // Сохранение клиентов
-    useEffect(() => {
-        if (isAuth && user && clients.length > 0) {
-            bridge.send('VKWebAppStorageSet', { 
-                key: `crm_clients_${user.id}`, 
-                value: JSON.stringify(clients) 
-            }).catch(console.error);
-        }
-    }, [clients, isAuth, user]);
-
-    // Сохранение бронирований
-    useEffect(() => {
-        if (isAuth && user && bookings.length > 0) {
-            bridge.send('VKWebAppStorageSet', { 
-                key: `crm_bookings_${user.id}`, 
-                value: JSON.stringify(bookings) 
-            }).catch(console.error);
-        }
-    }, [bookings, isAuth, user]);
-
-    // Обновление статистики
-    useEffect(() => {
-        const totalClients = clients.length;
-        const activeBookings = bookings.filter(b => b.status === 'active').length;
-        const totalRevenue = bookings.reduce((sum, b) => sum + b.price, 0);
-        const completedBookings = bookings.filter(b => b.status === 'completed').length;
-        setStats({ totalClients, activeBookings, totalRevenue, completedBookings });
-    }, [clients, bookings]);
-
-    // Добавление клиента
-    const addClient = (name, phone, email) => {
-        const newClient = {
-            id: Date.now(),
-            name,
-            phone,
-            email,
-            totalSpent: 0,
-            lastVisit: new Date().toISOString()
-        };
-        setClients(prev => [newClient, ...prev]);
-        setModal(null);
-    };
-
-    // Добавление бронирования
-    const addBooking = (clientId, clientName, service, price, duration) => {
-        const serviceInfo = SERVICE_TYPES.find(s => s.value === service);
-        const newBooking = {
-            id: Date.now(),
-            clientId,
-            clientName,
-            service,
-            serviceLabel: serviceInfo?.label || service,
-            price: price,
-            date: new Date().toISOString(),
-            status: 'active',
-            duration: duration || 1
-        };
-        setBookings(prev => [newBooking, ...prev]);
-        
-        setClients(prev => prev.map(c => 
-            c.id === clientId 
-                ? { ...c, totalSpent: c.totalSpent + price, lastVisit: new Date().toISOString() }
-                : c
-        ));
-        
-        setModal(null);
-    };
-
-    // Завершение бронирования
-    const completeBooking = (bookingId) => {
-        setBookings(prev => prev.map(b => 
-            b.id === bookingId ? { ...b, status: 'completed' } : b
-        ));
-        setShowConfirm(false);
-    };
-
-    // Выход
-    const handleLogout = () => {
-        setUser(null);
-        setIsAuth(false);
-        setClients([]);
-        setBookings([]);
-    };
-
-    // Модальные окна
-    const AddClientModal = () => {
-        const [name, setName] = useState('');
-        const [phone, setPhone] = useState('');
-        const [email, setEmail] = useState('');
-
-        return (
-            <ModalPage id="addClient" onClose={() => setModal(null)}>
-                <ModalPageHeader>➕ Новый клиент</ModalPageHeader>
-                <FormLayoutGroup>
-                    <FormItem top="Имя клиента">
-                        <Input placeholder="Иван Иванов" value={name} onChange={e => setName(e.target.value)} />
-                    </FormItem>
-                    <FormItem top="Телефон">
-                        <Input placeholder="+7 999 123-45-67" value={phone} onChange={e => setPhone(e.target.value)} />
-                    </FormItem>
-                    <FormItem top="Email">
-                        <Input placeholder="ivan@example.com" value={email} onChange={e => setEmail(e.target.value)} />
-                    </FormItem>
-                    <Button size="l" stretched onClick={() => {
-                        if (name && phone) {
-                            addClient(name, phone, email);
-                        } else {
-                            alert('Заполните имя и телефон!');
-                        }
-                    }}>Добавить клиента</Button>
-                </FormLayoutGroup>
-            </ModalPage>
-        );
-    };
-
-    const AddBookingModal = () => {
-        const [selectedClientId, setSelectedClientId] = useState('');
-        const [selectedService, setSelectedService] = useState('recording');
-        const [duration, setDuration] = useState(1);
-        
-        const selectedClient = clients.find(c => c.id === parseInt(selectedClientId));
-        const serviceInfo = SERVICE_TYPES.find(s => s.value === selectedService);
-
-        return (
-            <ModalPage id="addBooking" onClose={() => setModal(null)}>
-                <ModalPageHeader>🎵 Новая запись</ModalPageHeader>
-                <FormLayoutGroup>
-                    <FormItem top="Клиент">
-                        <Select
-                            value={selectedClientId}
-                            onChange={e => setSelectedClientId(e.target.value)}
-                            options={[
-                                { label: 'Выберите клиента', value: '' },
-                                ...clients.map(c => ({ label: c.name, value: c.id.toString() }))
-                            ]}
-                        />
-                    </FormItem>
-                    <FormItem top="Услуга">
-                        <Select
-                            value={selectedService}
-                            onChange={e => setSelectedService(e.target.value)}
-                            options={SERVICE_TYPES.map(s => ({ label: s.label, value: s.value }))}
-                        />
-                    </FormItem>
-                    <FormItem top="Длительность (часы)">
-                        <Input type="number" min="1" max="8" value={duration} onChange={e => setDuration(parseInt(e.target.value))} />
-                    </FormItem>
-                    {serviceInfo && (
-                        <FormItem top="Стоимость">
-                            <div style={{ fontSize: 18, fontWeight: 'bold', color: '#4BB34B' }}>
-                                {serviceInfo.price * duration} ₽
-                            </div>
-                        </FormItem>
-                    )}
-                    <Button size="l" stretched onClick={() => {
-                        if (selectedClientId && selectedService) {
-                            addBooking(
-                                parseInt(selectedClientId),
-                                selectedClient?.name,
-                                selectedService,
-                                serviceInfo.price * duration,
-                                duration
-                            );
-                        } else {
-                            alert('Выберите клиента и услугу!');
-                        }
-                    }}>Создать запись</Button>
-                </FormLayoutGroup>
-            </ModalPage>
-        );
-    };
-
-    const modalRoot = (
-        <ModalRoot activeModal={modal}>
-            <AddClientModal />
-            <AddBookingModal />
-        </ModalRoot>
-    );
-
-    // Экран загрузки
-    if (isLoading) {
-        return (
-            <AppRoot>
-                <View activePanel="loading">
-                    <Panel id="loading">
-                        <ScreenSpinner />
-                    </Panel>
-                </View>
-            </AppRoot>
-        );
+    const existingScript = document.querySelector('script[data-yandex-smartcaptcha]');
+    if (existingScript) {
+      renderCaptcha();
+      existingScript.addEventListener('load', renderCaptcha);
+      return () => existingScript.removeEventListener('load', renderCaptcha);
     }
 
-    // Экран ошибки
-    if (authError) {
-        return (
-            <AppRoot>
-                <View activePanel="error">
-                    <Panel id="error">
-                        <Group>
-                            <Div style={{ textAlign: 'center', padding: 40 }}>
-                                <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
-                                <Header size="large">Ошибка</Header>
-                                <div style={{ marginBottom: 24 }}>{authError}</div>
-                                <Button onClick={() => window.location.reload()}>Повторить</Button>
-                            </Div>
-                        </Group>
-                    </Panel>
-                </View>
-            </AppRoot>
-        );
-    }
+    const script = document.createElement('script');
+    script.src = 'https://smartcaptcha.yandexcloud.net/captcha.js';
+    script.async = true;
+    script.defer = true;
+    script.dataset.yandexSmartcaptcha = 'true';
+    script.onload = renderCaptcha;
+    script.onerror = () => setCaptchaReady(false);
+    document.body.appendChild(script);
 
-    // Экран входа
-    if (!isAuth) {
-        return (
-            <AppRoot>
-                <View activePanel="welcome">
-                    <Panel id="welcome">
-                        <Group style={{ marginTop: 40 }}>
-                            <Div style={{ textAlign: 'center' }}>
-                                <Avatar size={96} style={{ marginBottom: 20, background: '#6C5CE7' }}>
-                                    <Icon28MusicOutline width={48} height={48} fill="white" />
-                                </Avatar>
-                                <Header size="large">Music Studio CRM</Header>
-                                <Spacing size={20} />
-                                <div style={{ color: '#6c7a91', marginBottom: 32 }}>
-                                    Управляйте музыкальной студией<br />прямо в VK
-                                </div>
-                                <Button size="l" stretched onClick={() => window.location.reload()} style={{ background: '#0077ff', maxWidth: 300, margin: '0 auto' }}>
-                                    Войти через VK
-                                </Button>
-                            </Div>
-                        </Group>
-                    </Panel>
-                </View>
-            </AppRoot>
-        );
-    }
+    return () => {
+      script.onload = null;
+      script.onerror = null;
+    };
+  }, [captchaPassed, captchaToken]);
 
+  function passCaptcha() {
+    window.sessionStorage.setItem(CAPTCHA_SESSION_KEY, 'true');
+    setCaptchaPassed(true);
+  }
+
+  function updateStudentField(field, value) {
+    setStudentForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function addStudent(event) {
+    event.preventDefault();
+    const name = studentForm.name.trim();
+    if (!name) return;
+
+    const student = {
+      id: createId('student'),
+      ...studentForm,
+      name,
+      status: 'Активен',
+      createdAt: today,
+    };
+
+    setStudents((current) => [student, ...current]);
+    setStudentForm(emptyStudent);
+    setSubscriptionForm((current) => ({ ...current, studentId: student.id }));
+    setLessonForm((current) => ({ ...current, studentId: student.id }));
+    setActiveTab('students');
+  }
+
+  function addSubscription(event) {
+    event.preventDefault();
+    if (!subscriptionForm.studentId) return;
+
+    const selectedPlan = plans.find((plan) => plan.name === subscriptionForm.planName) || plans[0];
+    const start = new Date(subscriptionForm.startDate || today);
+    const end = new Date(start);
+    end.setMonth(end.getMonth() + 1);
+
+    const subscription = {
+      id: createId('sub'),
+      studentId: subscriptionForm.studentId,
+      planName: selectedPlan.name,
+      totalLessons: selectedPlan.lessons,
+      remainingLessons: selectedPlan.lessons,
+      price: selectedPlan.price,
+      startDate: subscriptionForm.startDate || today,
+      endDate: end.toISOString().slice(0, 10),
+      status: 'Активен',
+    };
+
+    setSubscriptions((current) => [subscription, ...current]);
+    setLessonForm((current) => ({ ...current, studentId: subscription.studentId, subscriptionId: subscription.id }));
+    setActiveTab('subscriptions');
+  }
+
+  function addLesson(event) {
+    event.preventDefault();
+    if (!lessonForm.studentId || !lessonForm.topic.trim()) return;
+
+    const lesson = {
+      id: createId('lesson'),
+      ...lessonForm,
+      topic: lessonForm.topic.trim(),
+      status: 'Запланирован',
+    };
+
+    setLessons((current) => [lesson, ...current]);
+    setLessonForm((current) => ({ ...current, topic: '' }));
+    setActiveTab('lessons');
+  }
+
+  function completeLesson(lessonId) {
+    const lesson = lessons.find((item) => item.id === lessonId);
+    if (!lesson || lesson.status === 'Проведен') return;
+
+    setLessons((current) => current.map((item) => (item.id === lessonId ? { ...item, status: 'Проведен' } : item)));
+    if (lesson.subscriptionId) {
+      setSubscriptions((current) => current.map((subscription) => {
+        if (subscription.id !== lesson.subscriptionId) return subscription;
+        const remainingLessons = Math.max(0, subscription.remainingLessons - 1);
+        return { ...subscription, remainingLessons, status: remainingLessons === 0 ? 'Завершен' : subscription.status };
+      }));
+    }
+  }
+
+  function removeStudent(studentId) {
+    setStudents((current) => current.filter((student) => student.id !== studentId));
+    setSubscriptions((current) => current.filter((subscription) => subscription.studentId !== studentId));
+    setLessons((current) => current.filter((lesson) => lesson.studentId !== studentId));
+  }
+
+  function updateLessonStudent(studentId) {
+    const studentSubscriptions = subscriptions.filter((subscription) => subscription.studentId === studentId && subscription.status === 'Активен');
+    setLessonForm((current) => ({ ...current, studentId, subscriptionId: studentSubscriptions[0]?.id || '' }));
+  }
+
+  if (!captchaPassed) {
     return (
-        <AppRoot>
-            {modalRoot}
-            
-            <Epic activeStory={activeTab} tabbar={
-                <Tabbar>
-                    <TabbarItem onClick={() => setActiveTab('dashboard')} selected={activeTab === 'dashboard'}>
-                        <Icon28MusicOutline />
-                    </TabbarItem>
-                    <TabbarItem onClick={() => setActiveTab('clients')} selected={activeTab === 'clients'}>
-                        <Icon28UsersOutline />
-                        <Counter size="s" mode="prominent">{clients.length}</Counter>
-                    </TabbarItem>
-                    <TabbarItem onClick={() => setActiveTab('bookings')} selected={activeTab === 'bookings'}>
-                        <Icon28NewsfeedOutline />
-                        <Counter size="s" mode="prominent">{bookings.filter(b => b.status === 'active').length}</Counter>
-                    </TabbarItem>
-                    <TabbarItem onClick={() => setActiveTab('profile')} selected={activeTab === 'profile'}>
-                        <Icon28UserOutline />
-                    </TabbarItem>
-                </Tabbar>
-            }>
-                {/* Дашборд */}
-                <View id="dashboard" activePanel="dashboard">
-                    <Panel id="dashboard">
-                        <PanelHeader>Music CRM</PanelHeader>
-                        
-                        <Group style={{ background: 'linear-gradient(135deg, #6C5CE7, #a29bfe)', margin: 16, borderRadius: 24 }}>
-                            <Div style={{ color: 'white', textAlign: 'center', padding: 24 }}>
-                                <div style={{ fontSize: 14, opacity: 0.8 }}>Добро пожаловать, {user?.first_name}!</div>
-                                <div style={{ fontSize: 28, fontWeight: 'bold' }}>Ваша студия</div>
-                            </Div>
-                        </Group>
-
-                        <Group header={<Header mode="secondary">📊 Статистика</Header>}>
-                            <Div style={{ display: 'flex', gap: 12 }}>
-                                <div style={{ flex: 1, textAlign: 'center', padding: 12, background: '#f0f2f5', borderRadius: 16 }}>
-                                    <div style={{ fontSize: 24 }}>👥</div>
-                                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#4BB34B' }}>{stats.totalClients}</div>
-                                    <div style={{ fontSize: 12, color: '#6c7a91' }}>Клиентов</div>
-                                </div>
-                                <div style={{ flex: 1, textAlign: 'center', padding: 12, background: '#f0f2f5', borderRadius: 16 }}>
-                                    <div style={{ fontSize: 24 }}>🎵</div>
-                                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#FF9F43' }}>{stats.activeBookings}</div>
-                                    <div style={{ fontSize: 12, color: '#6c7a91' }}>Активных</div>
-                                </div>
-                                <div style={{ flex: 1, textAlign: 'center', padding: 12, background: '#f0f2f5', borderRadius: 16 }}>
-                                    <div style={{ fontSize: 24 }}>💰</div>
-                                    <div style={{ fontSize: 20, fontWeight: 'bold', color: '#6C5CE7' }}>{stats.totalRevenue.toLocaleString()} ₽</div>
-                                    <div style={{ fontSize: 12, color: '#6c7a91' }}>Выручка</div>
-                                </div>
-                            </Div>
-                        </Group>
-
-                        <Group header={<Header mode="secondary">⚡ Быстрые действия</Header>}>
-                            <CardGrid size="l">
-                                <Card mode="shadow">
-                                    <Div style={{ textAlign: 'center', padding: 16 }}>
-                                        <div style={{ fontSize: 32, marginBottom: 8 }}>👤</div>
-                                        <div style={{ fontWeight: 500 }}>Новый клиент</div>
-                                        <Button size="m" stretched style={{ marginTop: 12, background: '#4BB34B' }} onClick={() => setModal('addClient')}>
-                                            Добавить
-                                        </Button>
-                                    </Div>
-                                </Card>
-                                <Card mode="shadow">
-                                    <Div style={{ textAlign: 'center', padding: 16 }}>
-                                        <div style={{ fontSize: 32, marginBottom: 8 }}>🎙️</div>
-                                        <div style={{ fontWeight: 500 }}>Новая запись</div>
-                                        <Button size="m" stretched style={{ marginTop: 12, background: '#4B8EF5' }} onClick={() => setModal('addBooking')}>
-                                            Создать
-                                        </Button>
-                                    </Div>
-                                </Card>
-                            </CardGrid>
-                        </Group>
-
-                        <Group header={<Header mode="secondary">📈 Услуги</Header>}>
-                            {SERVICE_TYPES.map(service => (
-                                <SimpleCell 
-                                    key={service.value}
-                                    before={<div style={{ fontSize: 24 }}>{service.label.charAt(0)}</div>}
-                                    after={<span style={{ color: service.color, fontWeight: 'bold' }}>{service.price} ₽/час</span>}
-                                >
-                                    {service.label}
-                                </SimpleCell>
-                            ))}
-                        </Group>
-                    </Panel>
-                </View>
-
-                {/* Клиенты */}
-                <View id="clients" activePanel="clients">
-                    <Panel id="clients">
-                        <PanelHeader>
-                            Клиенты
-                            <PanelHeaderButton onClick={() => setModal('addClient')}>
-                                <Icon28AddOutline />
-                            </PanelHeaderButton>
-                        </PanelHeader>
-                        <Group>
-                            {clients.map(client => (
-                                <Cell
-                                    key={client.id}
-                                    before={<Avatar size={40}>{client.name.charAt(0)}</Avatar>}
-                                    subtitle={`${client.phone} • Всего: ${client.totalSpent.toLocaleString()} ₽`}
-                                    after={<Button size="s" mode="secondary" onClick={() => setModal('addBooking')}>Записать</Button>}
-                                >
-                                    {client.name}
-                                </Cell>
-                            ))}
-                        </Group>
-                    </Panel>
-                </View>
-
-                {/* Записи */}
-                <View id="bookings" activePanel="bookings">
-                    <Panel id="bookings">
-                        <PanelHeader>
-                            Записи
-                            <PanelHeaderButton onClick={() => setModal('addBooking')}>
-                                <Icon28AddOutline />
-                            </PanelHeaderButton>
-                        </PanelHeader>
-                        <Group>
-                            {bookings.map(booking => (
-                                <Cell
-                                    key={booking.id}
-                                    before={booking.status === 'active' ? '🎙️' : '✅'}
-                                    subtitle={`${new Date(booking.date).toLocaleDateString('ru-RU')} • ${booking.duration} ч • ${booking.price} ₽`}
-                                    after={
-                                        booking.status === 'active' ? (
-                                            <Button size="s" mode="secondary" onClick={() => {
-                                                setConfirmData(booking);
-                                                setShowConfirm(true);
-                                            }}>Завершить</Button>
-                                        ) : (
-                                            <span style={{ color: '#4BB34B' }}>Выполнено</span>
-                                        )
-                                    }
-                                >
-                                    {booking.clientName} — {booking.serviceLabel}
-                                </Cell>
-                            ))}
-                        </Group>
-                    </Panel>
-                </View>
-
-                {/* Профиль */}
-                <View id="profile" activePanel="profile">
-                    <Panel id="profile">
-                        <PanelHeader>Профиль</PanelHeader>
-                        <Group>
-                            <Cell before={<Avatar src={user?.photo_100} size={48} />}>
-                                {user?.first_name} {user?.last_name}
-                            </Cell>
-                        </Group>
-                        
-                        <Group header={<Header mode="secondary">Итоги</Header>}>
-                            <SimpleCell subtitle="Всего клиентов" after={stats.totalClients}>👥 Клиентов</SimpleCell>
-                            <SimpleCell subtitle="Активных записей" after={stats.activeBookings}>🎵 Записей</SimpleCell>
-                            <SimpleCell subtitle="Выручка" after={`${stats.totalRevenue.toLocaleString()} ₽`}>💰 Выручка</SimpleCell>
-                        </Group>
-
-                        <Group header={<Header mode="secondary">Настройки</Header>}>
-                            <Cell before={<Icon28CancelOutline />} onClick={handleLogout} style={{ color: '#E64646' }}>
-                                Выйти
-                            </Cell>
-                        </Group>
-
-                        <Group>
-                            <Div style={{ textAlign: 'center', color: '#6c7a91', fontSize: 12, padding: 20 }}>
-                                Music Studio CRM v1.0
-                            </Div>
-                        </Group>
-                    </Panel>
-                </View>
-            </Epic>
-
-            {showConfirm && (
-                <Alert
-                    actions={[
-                        { title: 'Отмена', mode: 'cancel', action: () => setShowConfirm(false) },
-                        { title: 'Завершить', mode: 'default', action: () => completeBooking(confirmData.id) }
-                    ]}
-                    onClose={() => setShowConfirm(false)}
-                >
-                                    <h2>Завершить запись?</h2>
-                    <p>Отметить запись "{confirmData?.clientName} — {confirmData?.serviceLabel}" как выполненную?</p>
-                </Alert>
-            )}
-        </AppRoot>
+      <main className="captcha-screen">
+        <section className="captcha-card" aria-label="Проверка входа">
+          <div className="brand-mark">♪</div>
+          <p className="eyebrow">Solfejio CRM</p>
+          <h1>Музыкальная школа</h1>
+          <p>
+            Перед входом администратор проходит Яндекс SmartCaptcha. В учебном режиме без ключа доступна демо-проверка,
+            чтобы проект запускался сразу после сборки.
+          </p>
+          {CAPTCHA_SITE_KEY ? (
+            <>
+              <div className="captcha-widget" ref={captchaRef} />
+              {!captchaReady && <p className="muted">Загружаем виджет Яндекс SmartCaptcha...</p>}
+              <button className="primary-button" disabled={!captchaToken} onClick={passCaptcha} type="button">
+                Войти в систему
+              </button>
+            </>
+          ) : (
+            <button className="primary-button" onClick={passCaptcha} type="button">
+              Пройти учебную капчу
+            </button>
+          )}
+          <span className="security-note">Ключ капчи подключается через REACT_APP_YANDEX_CAPTCHA_SITEKEY.</span>
+        </section>
+      </main>
     );
+  }
+
+  return (
+    <main className="app-shell">
+      <aside className="sidebar">
+        <div className="logo-row">
+          <div className="brand-mark small">♪</div>
+          <div>
+            <strong>Solfejio</strong>
+            <span>CRM школы музыки</span>
+          </div>
+        </div>
+        <nav>
+          {[
+            ['dashboard', 'Обзор'],
+            ['students', 'Ученики'],
+            ['subscriptions', 'Абонементы'],
+            ['lessons', 'Занятия'],
+          ].map(([tab, label]) => (
+            <button className={activeTab === tab ? 'nav-button active' : 'nav-button'} key={tab} onClick={() => setActiveTab(tab)} type="button">
+              {label}
+            </button>
+          ))}
+        </nav>
+        <div className="sync-card">
+          <span>{cloudEnabled ? '☁️ Облако' : '💾 Демо'}</span>
+          <p>{syncStatus}</p>
+        </div>
+      </aside>
+
+      <section className="workspace">
+        <header className="hero">
+          <div>
+            <p className="eyebrow">Админ-панель</p>
+            <h1>Музыкальная школа «Solfejio»</h1>
+            <p>Ученики, абонементы, расписание и остатки занятий в одном интерфейсе.</p>
+          </div>
+          <div className="hero-badge">
+            <span>{plannedLessons.length}</span>
+            ближайших занятия
+          </div>
+        </header>
+
+        {activeTab === 'dashboard' && (
+          <section className="content-grid">
+            <article className="stat-card accent">
+              <span>Ученики</span>
+              <strong>{students.length}</strong>
+              <p>{students.filter((student) => student.status === 'Активен').length} активных</p>
+            </article>
+            <article className="stat-card">
+              <span>Абонементы</span>
+              <strong>{activeSubscriptions.length}</strong>
+              <p>сейчас действуют</p>
+            </article>
+            <article className="stat-card">
+              <span>Выручка</span>
+              <strong>{formatMoney(income)}</strong>
+              <p>по всем абонементам</p>
+            </article>
+            <article className="stat-card">
+              <span>Проведено</span>
+              <strong>{completedLessons.length}</strong>
+              <p>занятий отмечено</p>
+            </article>
+
+            <article className="panel wide">
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">Быстрые действия</p>
+                  <h2>Добавить ученика</h2>
+                </div>
+              </div>
+              <StudentForm form={studentForm} onChange={updateStudentField} onSubmit={addStudent} />
+            </article>
+
+            <article className="panel">
+              <h2>Сегодня в фокусе</h2>
+              <div className="timeline-list">
+                {plannedLessons.slice(0, 4).map((lesson) => (
+                  <div className="timeline-item" key={lesson.id}>
+                    <span>{lesson.time}</span>
+                    <div>
+                      <strong>{getStudentName(students, lesson.studentId)}</strong>
+                      <p>{lesson.topic}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+        )}
+
+        {activeTab === 'students' && (
+          <section className="content-grid two-columns">
+            <article className="panel">
+              <h2>Новый ученик</h2>
+              <StudentForm form={studentForm} onChange={updateStudentField} onSubmit={addStudent} />
+            </article>
+            <article className="panel list-panel">
+              <h2>База учеников</h2>
+              <div className="card-list">
+                {students.map((student) => (
+                  <div className="student-card" key={student.id}>
+                    <div>
+                      <strong>{student.name}</strong>
+                      <span>{student.instrument} · {student.teacher || 'преподаватель не назначен'}</span>
+                      <p>{student.phone} · {student.age || '—'} лет</p>
+                      {student.note && <small>{student.note}</small>}
+                    </div>
+                    <button className="ghost-button danger" onClick={() => removeStudent(student.id)} type="button">Удалить</button>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+        )}
+
+        {activeTab === 'subscriptions' && (
+          <section className="content-grid two-columns">
+            <article className="panel">
+              <h2>Добавить абонемент</h2>
+              <form className="form-stack" onSubmit={addSubscription}>
+                <label>
+                  Ученик
+                  <select value={subscriptionForm.studentId} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, studentId: event.target.value })}>
+                    {students.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Тариф
+                  <select value={subscriptionForm.planName} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, planName: event.target.value })}>
+                    {plans.map((plan) => <option key={plan.name} value={plan.name}>{plan.name} — {plan.lessons} зан., {formatMoney(plan.price)}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Дата начала
+                  <input type="date" value={subscriptionForm.startDate} onChange={(event) => setSubscriptionForm({ ...subscriptionForm, startDate: event.target.value })} />
+                </label>
+                <button className="primary-button" type="submit">Создать абонемент</button>
+              </form>
+            </article>
+            <article className="panel list-panel">
+              <h2>Абонементы</h2>
+              <div className="card-list">
+                {subscriptions.map((subscription) => (
+                  <div className="subscription-card" key={subscription.id}>
+                    <div>
+                      <strong>{subscription.planName}</strong>
+                      <span>{getStudentName(students, subscription.studentId)}</span>
+                    </div>
+                    <div className="progress-line"><i style={{ width: `${(subscription.remainingLessons / subscription.totalLessons) * 100}%` }} /></div>
+                    <p>{subscription.remainingLessons} из {subscription.totalLessons} занятий · до {subscription.endDate}</p>
+                    <b>{subscription.status}</b>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+        )}
+
+        {activeTab === 'lessons' && (
+          <section className="content-grid two-columns">
+            <article className="panel">
+              <h2>Запланировать занятие</h2>
+              <form className="form-stack" onSubmit={addLesson}>
+                <label>
+                  Ученик
+                  <select value={lessonForm.studentId} onChange={(event) => updateLessonStudent(event.target.value)}>
+                    {students.map((student) => <option key={student.id} value={student.id}>{student.name}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Абонемент
+                  <select value={lessonForm.subscriptionId} onChange={(event) => setLessonForm({ ...lessonForm, subscriptionId: event.target.value })}>
+                    <option value="">Без абонемента</option>
+                    {subscriptions.filter((subscription) => subscription.studentId === lessonForm.studentId).map((subscription) => (
+                      <option key={subscription.id} value={subscription.id}>{subscription.planName} · осталось {subscription.remainingLessons}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="inline-fields">
+                  <label>
+                    Дата
+                    <input type="date" value={lessonForm.date} onChange={(event) => setLessonForm({ ...lessonForm, date: event.target.value })} />
+                  </label>
+                  <label>
+                    Время
+                    <input type="time" value={lessonForm.time} onChange={(event) => setLessonForm({ ...lessonForm, time: event.target.value })} />
+                  </label>
+                </div>
+                <label>
+                  Тема
+                  <input placeholder="Например: постановка голоса" value={lessonForm.topic} onChange={(event) => setLessonForm({ ...lessonForm, topic: event.target.value })} />
+                </label>
+                <button className="primary-button" type="submit">Добавить занятие</button>
+              </form>
+            </article>
+            <article className="panel list-panel">
+              <h2>Расписание</h2>
+              <div className="card-list">
+                {lessons.map((lesson) => (
+                  <div className="lesson-card" key={lesson.id}>
+                    <time>{lesson.date} · {lesson.time}</time>
+                    <strong>{getStudentName(students, lesson.studentId)}</strong>
+                    <p>{lesson.topic}</p>
+                    <div className="lesson-actions">
+                      <span className={lesson.status === 'Проведен' ? 'pill done' : 'pill'}>{lesson.status}</span>
+                      {lesson.status !== 'Проведен' && <button className="ghost-button" onClick={() => completeLesson(lesson.id)} type="button">Отметить проведенным</button>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+        )}
+      </section>
+    </main>
+  );
+}
+
+function StudentForm({ form, onChange, onSubmit }) {
+  return (
+    <form className="form-stack" onSubmit={onSubmit}>
+      <label>
+        ФИО ученика
+        <input placeholder="Например: София Кузнецова" value={form.name} onChange={(event) => onChange('name', event.target.value)} />
+      </label>
+      <div className="inline-fields">
+        <label>
+          Возраст
+          <input min="3" placeholder="10" type="number" value={form.age} onChange={(event) => onChange('age', event.target.value)} />
+        </label>
+        <label>
+          Телефон
+          <input placeholder="+7 ..." value={form.phone} onChange={(event) => onChange('phone', event.target.value)} />
+        </label>
+      </div>
+      <div className="inline-fields">
+        <label>
+          Инструмент
+          <select value={form.instrument} onChange={(event) => onChange('instrument', event.target.value)}>
+            <option>Фортепиано</option>
+            <option>Гитара</option>
+            <option>Вокал</option>
+            <option>Скрипка</option>
+            <option>Ударные</option>
+            <option>Сольфеджио</option>
+          </select>
+        </label>
+        <label>
+          Преподаватель
+          <input placeholder="Имя педагога" value={form.teacher} onChange={(event) => onChange('teacher', event.target.value)} />
+        </label>
+      </div>
+      <label>
+        Заметка
+        <textarea placeholder="Цели, особенности расписания, комментарий" value={form.note} onChange={(event) => onChange('note', event.target.value)} />
+      </label>
+      <button className="primary-button" type="submit">Добавить ученика</button>
+    </form>
+  );
 }
 
 export default App;
