@@ -1,148 +1,85 @@
-# 🎵 Music Studio CRM — VK Mini App
-![VK Mini App](https://img.shields.io/badge/VK-Mini%20App-0077ff?style=for-the-badge&logo=vk&logoColor=white)
-![React](https://img.shields.io/badge/React-18.2.0-61dafb?style=for-the-badge&logo=react&logoColor=white)
-![VKUI](https://img.shields.io/badge/VKUI-5.0.0-0077ff?style=for-the-badge&logo=vk&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
-> **CRM-система для музыкальной студии** в виде мини-приложения для социальной сети ВКонтакте. Управляйте клиентами, записями и финансами прямо в VK с любого устройства.
+# Solfejio — CRM для музыкальной школы
 
-## 📱 Ссылка на приложение
-[https://vk.com/app54569233](https://vk.com/app54569233)
----
-## ✨ Функционал
-| Функция | Описание |
-|---------|----------|
-| 👥 **Управление клиентами** | Добавление, просмотр и учёт истории посещений клиентов |
-| 🎵 **Управление записями** | Создание бронирований с выбором услуги и длительности |
-| 💰 **Финансовый учёт** | Автоматический подсчёт выручки и трат каждого клиента |
-| 📊 **Дашборд со статистикой** | Клиенты, активные записи, общая выручка |
-| ⚡ **Быстрые действия** | Добавление клиента/записи в два клика |
-| ✅ **Завершение записей** | Отметка выполненных работ |
-| 🔐 **Авторизация через VK ID** | Быстрый и безопасный вход |
-| ☁️ **Облачное хранение** | Все данные сохраняются в VK Storage |
+Учебный React-проект для администрирования музыкальной школы: вход через Яндекс SmartCaptcha, база учеников, абонементы, расписание занятий и учет оставшихся уроков.
 
----
-## 🎧 Доступные услуги
-| Услуга | Цена (в час) |
-|--------|--------------|
-| 🎙️ Запись вокала | 1 500 ₽ |
-| 🎚️ Сведение | 5 000 ₽ |
-| ✨ Мастеринг | 3 000 ₽ |
-| 🥁 Репетиция | 800 ₽ |
-| 🎸 Инструментал | 2 000 ₽ |
-| 💡 Консультация | 1 000 ₽ |
----
-## 🛠️ Технологии
-| Категория | Технология | Версия |
-|-----------|------------|--------|
-| **Frontend** | React | 18.2.0 |
-| **UI-библиотека** | VKUI | 5.0.0 |
-| **API-коммуникация** | VK Bridge | 4.0.0 |
-| **Хранение данных** | VK Storage API | — |
-| **Хостинг** | VK Hosting | — |
-| **Сборка** | React Scripts | 5.0.1 |
----
+## Что реализовано
 
-## 📁 Структура проекта
-## 🚀 Установка и запуск
+- стартовый экран с Яндекс SmartCaptcha;
+- учебный fallback-кнопка капчи, если ключ не задан, чтобы проект запускался сразу;
+- добавление, просмотр и удаление учеников;
+- создание абонементов по тарифам;
+- планирование занятий;
+- отметка занятия проведенным с автоматическим уменьшением остатка по абонементу;
+- статистика по ученикам, активным абонементам, занятиям и выручке;
+- адаптивный интерфейс в стиле премиальной музыкальной школы;
+- локальное резервное сохранение в браузере;
+- опциональное облачное хранение в Supabase Free через REST API;
+- конфиг для бесплатного деплоя на Netlify и существующий конфиг VK Hosting.
 
-### 1. Клонирование репозитория
+## Быстрый запуск
+
 ```bash
-git clone https://github.com/your-username/music-studio-crm.git
-cd music-studio-crm/client
-
-**2. Установка зависимостей**
-bash
 npm install
-
-**3. Запуск в режиме разработки**
-bash
 npm start
-Приложение откроется по адресу http://localhost:3000
+```
 
-**4. Сборка production-версии**b
-bash
+Без переменных окружения приложение работает в демо-режиме: капча проходится учебной кнопкой, данные сохраняются в `localStorage`.
+
+## Переменные окружения
+
+Скопируйте пример:
+
+```bash
+cp .env.example .env
+```
+
+```env
+REACT_APP_YANDEX_CAPTCHA_SITEKEY=your_yandex_smartcaptcha_client_key
+REACT_APP_SUPABASE_URL=https://your-project.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
+REACT_APP_SUPABASE_STATE_ID=music-school-demo
+```
+
+### Яндекс SmartCaptcha
+
+1. Создайте капчу в Yandex Cloud SmartCaptcha.
+2. Добавьте домен деплоя в разрешенные домены.
+3. Укажите клиентский ключ в `REACT_APP_YANDEX_CAPTCHA_SITEKEY`.
+
+В учебном frontend-only проекте проверяется получение токена виджета. Для боевого проекта токен нужно дополнительно проверять на сервере через секретный ключ SmartCaptcha.
+
+### Supabase Free
+
+1. Создайте бесплатный проект Supabase.
+2. Откройте SQL Editor.
+3. Выполните содержимое `supabase-schema.sql`.
+4. Возьмите `Project URL` и `anon public key` из Project Settings → API.
+5. Добавьте эти значения в env на хостинге.
+
+## Бесплатный деплой
+
+### Netlify
+
+1. Подключите репозиторий к Netlify.
+2. Build command: `npm run build`.
+3. Publish directory: `build`.
+4. Добавьте env-переменные из `.env.example`.
+5. Deploy.
+
+Файл `netlify.toml` уже добавлен.
+
+### VK Hosting
+
+В репозитории оставлен `vk-hosting-config.json`. После получения сервисного ключа VK Mini Apps:
+
+```bash
 npm run build
-**5. Деплой на VK Hosting**
-bash
-npm run deploy
-🔧 Настройка деплоя
+npx vk-miniapps-deploy deploy <VK_SERVICE_TOKEN> --no-update-test-group
+```
 
-**1. Создайте файл vk-hosting-config.json**
-json
-{
-  "static_path": "build",
-  "app_id": "ВАШ_ID_ПРИЛОЖЕНИЯ",
-  "endpoints": {
-    "mobile": "index.html",
-    "mvk": "index.html",
-    "web": "index.html"
-  }
-}
+## Проверка
 
-**2. Добавьте скрипты в package.json**
-json
-"scripts": {
-  "start": "react-scripts start",
-  "build": "react-scripts build",
-  "predeploy": "npm run build",
-  "deploy": "vk-miniapps-deploy"
-}
-
-**3. Деплой с сервисным ключом**
-bash
-npx vk-miniapps-deploy deploy ВАШ_СЕРВИСНЫЙ_КЛЮЧ --no-update-test-group
-📊 Архитектура
-text
-┌─────────────────────────────────────────────────────────────┐
-│                      VK MINI APP (Фронтенд)                 │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
-│  │   React     │  │    VKUI     │  │  VK Bridge  │         │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘         │
-└─────────┼────────────────┼────────────────┼────────────────┘
-          │                │                │
-          ▼                ▼                ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      API VK (Бесплатно)                     │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
-│  │  VK Auth    │  │ VK Storage  │  │ VK Hosting  │         │
-│  └─────────────┘  └─────────────┘  └─────────────┘         │
-└─────────────────────────────────────────────────────────────┘
-🗄️ Хранение данных (VK Storage)
-
-javascript
-// Загрузка данных
-const storageData = await bridge.send('VKWebAppStorageGet', {
-    keys: [`crm_clients_${userId}`, `crm_bookings_${userId}`]
-});
-
-// Сохранение данных
-await bridge.send('VKWebAppStorageSet', { 
-    key: `crm_clients_${userId}`, 
-    value: JSON.stringify(clients) 
-});
-
-📈 Статистика проекта
-Показатель	Значение
-Количество компонентов	8
-Объём кода	1 200+ строк
-UI-компонентов VKUI	20+
-API-вызовов VK Bridge	3 типа
-Хранилище	100 МБ на пользователя
-Платформы	iOS, Android, Web
-
-📝 Лицензия
-MIT License
-
-**👨‍💻 Автор**
-Филатов Тимур Денисович
-
-**Группа: 9/3-РПО-23/1-Ш**
-
-**Специальность: 09.02.07 Информационные системы и программирование**
-
-**🙏 Благодарности**
-Команде VK за отличную документацию VK Bridge и VKUI
-
-Преподавателям колледжа "Академия ТОП" за ценные советы
-
-🔗 Ссылка на приложение: https://vk.com/app54569233
+```bash
+npm test -- --watchAll=false
+npm run build
+```
