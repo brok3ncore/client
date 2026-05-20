@@ -229,10 +229,10 @@ function App() {
         }
       })
       .catch((error) => {
-        window.sessionStorage.removeItem(CLOUD_SESSION_KEY);
-        setCloudSessionToken('');
         if (error.status === 403) {
+          window.sessionStorage.removeItem(CLOUD_SESSION_KEY);
           window.sessionStorage.removeItem(CAPTCHA_SESSION_KEY);
+          setCloudSessionToken('');
           setCaptchaPassed(false);
           setCaptchaToken('');
         }
