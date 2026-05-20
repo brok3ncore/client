@@ -131,6 +131,13 @@ function normalizeSchoolState(data) {
   return { students, subscriptions, lessons };
 }
 
+class CloudStorageError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function loadCloudState({ captchaToken, cloudSessionToken }) {
   if (!captchaToken && !cloudSessionToken) return null;
 
@@ -142,7 +149,7 @@ async function loadCloudState({ captchaToken, cloudSessionToken }) {
   });
 
   if (response.status === 404) return response.json();
-  if (!response.ok) throw new Error('Не удалось загрузить данные из Supabase');
+  if (!response.ok) throw new CloudStorageError('Не удалось загрузить данные из Supabase', response.status);
   return response.json();
 }
 
@@ -158,7 +165,7 @@ async function saveCloudState(data, cloudSessionToken) {
     body: JSON.stringify({ id: SUPABASE_STATE_ID, data }),
   });
 
-  if (!response.ok) throw new Error('Не удалось сохранить данные в Supabase');
+  if (!response.ok) throw new CloudStorageError('Не удалось сохранить данные в Supabase', response.status);
   return 'cloud';
 }
 
@@ -221,9 +228,14 @@ function App() {
           setSyncStatus(captchaToken ? 'Supabase подключен, используется новая база' : 'Работает локальное демо-хранилище');
         }
       })
-      .catch(() => {
+      .catch((error) => {
         window.sessionStorage.removeItem(CLOUD_SESSION_KEY);
         setCloudSessionToken('');
+        if (error.status === 403) {
+          window.sessionStorage.removeItem(CAPTCHA_SESSION_KEY);
+          setCaptchaPassed(false);
+          setCaptchaToken('');
+        }
         setSyncStatus('Supabase недоступен, включен локальный резерв');
       })
       .finally(() => setHydrated(true));
@@ -235,7 +247,16 @@ function App() {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stateSnapshot));
     saveCloudState(stateSnapshot, cloudSessionToken)
       .then((target) => setSyncStatus(target === 'cloud' ? 'Сохранено в Supabase' : 'Сохранено в браузере'))
-      .catch(() => setSyncStatus('Supabase недоступен, изменения сохранены в браузере'));
+      .catch((error) => {
+        if (error.status === 403) {
+          window.sessionStorage.removeItem(CLOUD_SESSION_KEY);
+          window.sessionStorage.removeItem(CAPTCHA_SESSION_KEY);
+          setCloudSessionToken('');
+          setCaptchaPassed(false);
+          setCaptchaToken('');
+        }
+        setSyncStatus('Supabase недоступен, изменения сохранены в браузере');
+      });
   }, [cloudSessionToken, hydrated, stateSnapshot]);
 
   useEffect(() => {
