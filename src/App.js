@@ -6,6 +6,7 @@ const CLOUD_API_URL = process.env.REACT_APP_CLOUD_API_URL || '/.netlify/function
 const SUPABASE_STATE_ID = process.env.REACT_APP_SUPABASE_STATE_ID || 'music-school-demo';
 const STORAGE_KEY = 'solfejio_music_school_state_v1';
 const CAPTCHA_SESSION_KEY = 'solfejio_captcha_passed';
+const CLOUD_SESSION_KEY = 'solfejio_cloud_session_token';
 
 const starterStudents = [
   {
@@ -130,16 +131,17 @@ function normalizeSchoolState(data) {
   return { students, subscriptions, lessons };
 }
 
-async function loadCloudState(captchaToken) {
-  if (!captchaToken) return null;
+async function loadCloudState({ captchaToken, cloudSessionToken }) {
+  if (!captchaToken && !cloudSessionToken) return null;
 
   const response = await fetch(`${CLOUD_API_URL}?id=${encodeURIComponent(SUPABASE_STATE_ID)}`, {
     headers: {
-      'x-captcha-token': captchaToken,
+      ...(captchaToken ? { 'x-captcha-token': captchaToken } : {}),
+      ...(cloudSessionToken ? { 'x-cloud-session-token': cloudSessionToken } : {}),
     },
   });
 
-  if (response.status === 404) return { data: null, sessionToken: '' };
+  if (response.status === 404) return response.json();
   if (!response.ok) throw new Error('Не удалось загрузить данные из Supabase');
   return response.json();
 }
@@ -174,7 +176,7 @@ function App() {
   const [lessonForm, setLessonForm] = useState({ studentId: starterStudents[0].id, subscriptionId: starterSubscriptions[0].id, date: today, time: '17:00', topic: '' });
   const [syncStatus, setSyncStatus] = useState('Загрузка данных...');
   const [hydrated, setHydrated] = useState(false);
-  const [cloudSessionToken, setCloudSessionToken] = useState('');
+  const [cloudSessionToken, setCloudSessionToken] = useState(() => window.sessionStorage.getItem(CLOUD_SESSION_KEY) || '');
 
   const stateSnapshot = useMemo(() => ({ students, subscriptions, lessons }), [students, subscriptions, lessons]);
   const cloudEnabled = Boolean(cloudSessionToken || captchaToken);
@@ -206,9 +208,10 @@ function App() {
       return;
     }
 
-    loadCloudState(captchaToken)
+    loadCloudState({ captchaToken, cloudSessionToken })
       .then((cloudState) => {
         if (cloudState?.sessionToken) {
+          window.sessionStorage.setItem(CLOUD_SESSION_KEY, cloudState.sessionToken);
           setCloudSessionToken(cloudState.sessionToken);
         }
         if (cloudState?.data) {
@@ -218,9 +221,13 @@ function App() {
           setSyncStatus(captchaToken ? 'Supabase подключен, используется новая база' : 'Работает локальное демо-хранилище');
         }
       })
-      .catch(() => setSyncStatus('Supabase недоступен, включен локальный резерв'))
+      .catch(() => {
+        window.sessionStorage.removeItem(CLOUD_SESSION_KEY);
+        setCloudSessionToken('');
+        setSyncStatus('Supabase недоступен, включен локальный резерв');
+      })
       .finally(() => setHydrated(true));
-  }, [captchaPassed, captchaToken]);
+  }, [captchaPassed, captchaToken, cloudSessionToken]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -263,7 +270,7 @@ function App() {
       script.onload = null;
       script.onerror = null;
     };
-  }, [captchaPassed, captchaToken]);
+  }, [captchaPassed, captchaToken, cloudSessionToken]);
 
   function passCaptcha() {
     window.sessionStorage.setItem(CAPTCHA_SESSION_KEY, 'true');
