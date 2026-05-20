@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import './App.css';
 
 const STORAGE_KEY = 'harmony-school-crm-data-v1';
+const WORKSPACE_KEY = 'harmony-school-workspace-id-v1';
 const captchaSiteKey = process.env.REACT_APP_YANDEX_CAPTCHA_SITE_KEY || '';
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
@@ -103,7 +104,8 @@ function formatDate(value) {
 async function loadCloudData() {
   if (!supabaseUrl || !supabaseAnonKey) return null;
 
-  const response = await fetch(`${supabaseUrl}/rest/v1/${supabaseTable}?id=eq.default&select=data`, {
+  const workspaceId = getWorkspaceId();
+  const response = await fetch(`${supabaseUrl}/rest/v1/${supabaseTable}?id=eq.${encodeURIComponent(workspaceId)}&select=data`, {
     headers: {
       apikey: supabaseAnonKey,
       Authorization: `Bearer ${supabaseAnonKey}`,
@@ -118,6 +120,7 @@ async function loadCloudData() {
 async function saveCloudData(data) {
   if (!supabaseUrl || !supabaseAnonKey) return;
 
+  const workspaceId = getWorkspaceId();
   const response = await fetch(`${supabaseUrl}/rest/v1/${supabaseTable}?on_conflict=id`, {
     method: 'POST',
     headers: {
@@ -126,10 +129,33 @@ async function saveCloudData(data) {
       'Content-Type': 'application/json',
       Prefer: 'resolution=merge-duplicates',
     },
-    body: JSON.stringify([{ id: 'default', data, updated_at: new Date().toISOString() }]),
+    body: JSON.stringify([{ id: workspaceId, data, updated_at: new Date().toISOString() }]),
   });
 
   if (!response.ok) throw new Error('Не удалось сохранить данные в Supabase');
+}
+
+function getStoredData() {
+  try {
+    const local = localStorage.getItem(STORAGE_KEY);
+    return local ? JSON.parse(local) : initialData;
+  } catch (error) {
+    localStorage.removeItem(STORAGE_KEY);
+    return initialData;
+  }
+}
+
+function getWorkspaceId() {
+  const configuredWorkspaceId = process.env.REACT_APP_SCHOOL_WORKSPACE_ID;
+  if (configuredWorkspaceId) return configuredWorkspaceId;
+
+  const existingWorkspaceId = localStorage.getItem(WORKSPACE_KEY);
+  if (existingWorkspaceId) return existingWorkspaceId;
+
+  const randomId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const generatedWorkspaceId = `school_${randomId}`;
+  localStorage.setItem(WORKSPACE_KEY, generatedWorkspaceId);
+  return generatedWorkspaceId;
 }
 
 function CaptchaGate({ onVerified }) {
@@ -212,14 +238,7 @@ function CaptchaGate({ onVerified }) {
 function App() {
   const [captchaPassed, setCaptchaPassed] = useState(() => sessionStorage.getItem('captchaPassed') === 'true');
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [data, setData] = useState(() => {
-    try {
-      const local = localStorage.getItem(STORAGE_KEY);
-      return local ? JSON.parse(local) : initialData;
-    } catch (error) {
-      return initialData;
-    }
-  });
+  const [data, setData] = useState(getStoredData);
   const [studentForm, setStudentForm] = useState(emptyStudent);
   const [planForm, setPlanForm] = useState(emptyPlan);
   const [subscriptionForm, setSubscriptionForm] = useState({ studentId: '', planId: '', startsAt: new Date().toISOString().slice(0, 10), paid: true });
@@ -246,9 +265,8 @@ function App() {
           setStorageStatus('Данные синхронизированы с Supabase');
         }
       } catch (error) {
-        const local = localStorage.getItem(STORAGE_KEY);
         if (!cancelled) {
-          setData(local ? JSON.parse(local) : initialData);
+          setData(getStoredData());
           setStorageStatus('Supabase недоступен, включено локальное демо-хранение');
         }
       }

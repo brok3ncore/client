@@ -34,6 +34,11 @@ YANDEX_CAPTCHA_SECRET_KEY=server-secret-key
 REACT_APP_SUPABASE_URL=https://project.supabase.co
 REACT_APP_SUPABASE_ANON_KEY=anon-key
 REACT_APP_SUPABASE_TABLE=music_school_data
+
+# Необязательно: общий workspace для одной учебной школы.
+# Если не задать, приложение создаст случайный workspace в браузере,
+# чтобы разные посетители не перетирали одну запись Supabase.
+REACT_APP_SCHOOL_WORKSPACE_ID=school_my_music_school
 ```
 
 `REACT_APP_YANDEX_CAPTCHA_SITE_KEY` — публичный ключ виджета.  
@@ -52,27 +57,27 @@ create table if not exists public.music_school_data (
 
 alter table public.music_school_data enable row level security;
 
-create policy "Allow anon read music school demo data"
+create policy "Allow anon read isolated demo workspaces"
 on public.music_school_data
 for select
 to anon
-using (true);
+using (id like 'school_%');
 
-create policy "Allow anon upsert music school demo data"
+create policy "Allow anon create isolated demo workspaces"
 on public.music_school_data
 for insert
 to anon
-with check (true);
+with check (id like 'school_%');
 
-create policy "Allow anon update music school demo data"
+create policy "Allow anon update isolated demo workspaces"
 on public.music_school_data
 for update
 to anon
-using (true)
-with check (true);
+using (id like 'school_%')
+with check (id like 'school_%');
 ```
 
-Для учебного проекта используется одна JSON-строка `id = 'default'`. Для реальной школы лучше добавить авторизацию и отдельные таблицы `students`, `plans`, `subscriptions`, `lessons`.
+Для учебного проекта данные лежат в JSON-строке с `id = REACT_APP_SCHOOL_WORKSPACE_ID` или в автоматически созданном случайном `school_<uuid>` workspace. Если задаёте общий workspace вручную, используйте префикс `school_`. Это не даёт разным посетителям публичной демо-версии перетирать одну и ту же запись. Для реальной школы всё равно стоит добавить полноценную авторизацию и отдельные таблицы `students`, `plans`, `subscriptions`, `lessons`.
 
 ## Деплой не локально
 
