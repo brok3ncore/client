@@ -345,14 +345,17 @@ function App() {
   if (!captchaPassed) {
     return (
       <main className="captcha-screen">
+        <div className="captcha-orbit one" />
+        <div className="captcha-orbit two" />
         <section className="captcha-card" aria-label="Проверка входа">
-          <div className="brand-mark">♪</div>
-          <p className="eyebrow">Solfejio CRM</p>
-          <h1>Музыкальная школа</h1>
-          <p>
-            Перед входом администратор проходит Яндекс SmartCaptcha. В учебном режиме без ключа доступна демо-проверка,
-            чтобы проект запускался сразу после сборки.
-          </p>
+          <div className="brand-mark">S</div>
+          <div className="captcha-copy">
+            <p className="eyebrow">Conservatory access</p>
+            <h1>Solfejio Control Room</h1>
+            <p>
+              Вход в панель управления школой: ученики, абонементы и расписание открываются после проверки администратора.
+            </p>
+          </div>
           {CAPTCHA_SITE_KEY ? (
             <>
               <div className="captcha-widget" ref={captchaRef} />
@@ -366,7 +369,7 @@ function App() {
               Пройти учебную капчу
             </button>
           )}
-          <span className="security-note">Ключ капчи подключается через REACT_APP_YANDEX_CAPTCHA_SITEKEY.</span>
+          <span className="security-note">SmartCaptcha подключается через REACT_APP_YANDEX_CAPTCHA_SITEKEY.</span>
         </section>
       </main>
     );
@@ -374,63 +377,78 @@ function App() {
 
   return (
     <main className="app-shell">
+      <div className="shell-aura top" />
+      <div className="shell-aura bottom" />
       <aside className="sidebar">
-        <div className="logo-row">
-          <div className="brand-mark small">♪</div>
+        <div className="logo-row sidebar-header">
+          <div className="brand-mark small">S</div>
           <div>
             <strong>Solfejio</strong>
-            <span>CRM школы музыки</span>
+            <span>music operations</span>
           </div>
         </div>
         <nav>
           {[
-            ['dashboard', 'Обзор'],
-            ['students', 'Ученики'],
-            ['subscriptions', 'Абонементы'],
-            ['lessons', 'Занятия'],
-          ].map(([tab, label]) => (
+            ['dashboard', 'Обзор', '01'],
+            ['students', 'Ученики', '02'],
+            ['subscriptions', 'Абонементы', '03'],
+            ['lessons', 'Занятия', '04'],
+          ].map(([tab, label, number]) => (
             <button className={activeTab === tab ? 'nav-button active' : 'nav-button'} key={tab} onClick={() => setActiveTab(tab)} type="button">
-              {label}
+              <span className="nav-number">{number}</span>
+              <span>{label}</span>
+              <i className="nav-dot" />
             </button>
           ))}
         </nav>
         <div className="sync-card">
-          <span>{cloudEnabled ? '☁️ Облако' : '💾 Демо'}</span>
+          <div className="sync-orb" />
+          <span>{cloudEnabled ? 'Облачный режим' : 'Демо-режим'}</span>
           <p>{syncStatus}</p>
         </div>
       </aside>
 
       <section className="workspace">
         <header className="hero">
-          <div>
-            <p className="eyebrow">Админ-панель</p>
-            <h1>Музыкальная школа «Solfejio»</h1>
-            <p>Ученики, абонементы, расписание и остатки занятий в одном интерфейсе.</p>
+          <div className="hero-copy">
+            <p className="eyebrow">Операционный центр</p>
+            <h1>CRM для школы, которая звучит как студия будущего.</h1>
+            <p>Контролируйте учеников, тарифы и занятия в тёмной панели с быстрыми метриками и живой навигацией.</p>
           </div>
-          <div className="hero-badge">
-            <span>{plannedLessons.length}</span>
-            ближайших занятия
+          <div className="hero-panel">
+            <span className="hero-kicker">Сегодня в эфире</span>
+            <div className="hero-badge">
+              <span>{plannedLessons.length}</span>
+              ближайших занятия
+            </div>
+            <div className="hero-meter">
+              <i style={{ width: `${Math.min(100, plannedLessons.length * 24)}%` }} />
+            </div>
+            <div className="hero-metric">
+              <span>{students.length} учеников</span>
+              <span>{activeSubscriptions.length} активных абонементов</span>
+            </div>
           </div>
         </header>
 
         {activeTab === 'dashboard' && (
           <section className="content-grid">
-            <article className="stat-card accent">
+            <article className="stat-card accent tone-violet">
               <span>Ученики</span>
               <strong>{students.length}</strong>
               <p>{students.filter((student) => student.status === 'Активен').length} активных</p>
             </article>
-            <article className="stat-card">
+            <article className="stat-card tone-cyan">
               <span>Абонементы</span>
               <strong>{activeSubscriptions.length}</strong>
               <p>сейчас действуют</p>
             </article>
-            <article className="stat-card">
+            <article className="stat-card tone-gold">
               <span>Выручка</span>
               <strong>{formatMoney(income)}</strong>
               <p>по всем абонементам</p>
             </article>
-            <article className="stat-card">
+            <article className="stat-card tone-green">
               <span>Проведено</span>
               <strong>{completedLessons.length}</strong>
               <p>занятий отмечено</p>
@@ -447,8 +465,12 @@ function App() {
             </article>
 
             <article className="panel">
-              <h2>Сегодня в фокусе</h2>
+              <div className="panel-heading compact">
+                <p className="eyebrow">Расписание</p>
+                <h2>Сегодня в фокусе</h2>
+              </div>
               <div className="timeline-list">
+                {plannedLessons.length === 0 && <p className="empty-state">Запланированных занятий пока нет.</p>}
                 {plannedLessons.slice(0, 4).map((lesson) => (
                   <div className="timeline-item" key={lesson.id}>
                     <span>{lesson.time}</span>
@@ -474,6 +496,7 @@ function App() {
               <div className="card-list">
                 {students.map((student) => (
                   <div className="student-card" key={student.id}>
+                    <div className="card-avatar">{student.name.slice(0, 1)}</div>
                     <div>
                       <strong>{student.name}</strong>
                       <span>{student.instrument} · {student.teacher || 'преподаватель не назначен'}</span>
@@ -517,13 +540,18 @@ function App() {
               <div className="card-list">
                 {subscriptions.map((subscription) => (
                   <div className="subscription-card" key={subscription.id}>
-                    <div>
-                      <strong>{subscription.planName}</strong>
-                      <span>{getStudentName(students, subscription.studentId)}</span>
+                    <div className="subscription-head">
+                      <div>
+                        <strong>{subscription.planName}</strong>
+                        <span>{getStudentName(students, subscription.studentId)}</span>
+                      </div>
+                      <b>{subscription.status}</b>
                     </div>
                     <div className="progress-line"><i style={{ width: `${(subscription.remainingLessons / subscription.totalLessons) * 100}%` }} /></div>
-                    <p>{subscription.remainingLessons} из {subscription.totalLessons} занятий · до {subscription.endDate}</p>
-                    <b>{subscription.status}</b>
+                    <div className="progress-meta">
+                      <p>{subscription.remainingLessons} из {subscription.totalLessons} занятий</p>
+                      <p>до {subscription.endDate}</p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -573,11 +601,13 @@ function App() {
               <div className="card-list">
                 {lessons.map((lesson) => (
                   <div className="lesson-card" key={lesson.id}>
-                    <time>{lesson.date} · {lesson.time}</time>
+                    <div className="lesson-topline">
+                      <time>{lesson.date} · {lesson.time}</time>
+                      <span className={lesson.status === 'Проведен' ? 'pill done' : 'pill'}>{lesson.status}</span>
+                    </div>
                     <strong>{getStudentName(students, lesson.studentId)}</strong>
                     <p>{lesson.topic}</p>
                     <div className="lesson-actions">
-                      <span className={lesson.status === 'Проведен' ? 'pill done' : 'pill'}>{lesson.status}</span>
                       {lesson.status !== 'Проведен' && <button className="ghost-button" onClick={() => completeLesson(lesson.id)} type="button">Отметить проведенным</button>}
                     </div>
                   </div>
