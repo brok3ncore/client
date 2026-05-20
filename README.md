@@ -1,148 +1,110 @@
-# 🎵 Music Studio CRM — VK Mini App
-![VK Mini App](https://img.shields.io/badge/VK-Mini%20App-0077ff?style=for-the-badge&logo=vk&logoColor=white)
-![React](https://img.shields.io/badge/React-18.2.0-61dafb?style=for-the-badge&logo=react&logoColor=white)
-![VKUI](https://img.shields.io/badge/VKUI-5.0.0-0077ff?style=for-the-badge&logo=vk&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
-> **CRM-система для музыкальной студии** в виде мини-приложения для социальной сети ВКонтакте. Управляйте клиентами, записями и финансами прямо в VK с любого устройства.
+# Harmony School CRM
 
-## 📱 Ссылка на приложение
-[https://vk.com/app54569233](https://vk.com/app54569233)
----
-## ✨ Функционал
-| Функция | Описание |
-|---------|----------|
-| 👥 **Управление клиентами** | Добавление, просмотр и учёт истории посещений клиентов |
-| 🎵 **Управление записями** | Создание бронирований с выбором услуги и длительности |
-| 💰 **Финансовый учёт** | Автоматический подсчёт выручки и трат каждого клиента |
-| 📊 **Дашборд со статистикой** | Клиенты, активные записи, общая выручка |
-| ⚡ **Быстрые действия** | Добавление клиента/записи в два клика |
-| ✅ **Завершение записей** | Отметка выполненных работ |
-| 🔐 **Авторизация через VK ID** | Быстрый и безопасный вход |
-| ☁️ **Облачное хранение** | Все данные сохраняются в VK Storage |
+Учебный проект с нуля на тему **«Музыкальная школа»**. Это standalone React-приложение без VK: при входе показывает Yandex SmartCaptcha, затем открывает CRM для администратора школы.
 
----
-## 🎧 Доступные услуги
-| Услуга | Цена (в час) |
-|--------|--------------|
-| 🎙️ Запись вокала | 1 500 ₽ |
-| 🎚️ Сведение | 5 000 ₽ |
-| ✨ Мастеринг | 3 000 ₽ |
-| 🥁 Репетиция | 800 ₽ |
-| 🎸 Инструментал | 2 000 ₽ |
-| 💡 Консультация | 1 000 ₽ |
----
-## 🛠️ Технологии
-| Категория | Технология | Версия |
-|-----------|------------|--------|
-| **Frontend** | React | 18.2.0 |
-| **UI-библиотека** | VKUI | 5.0.0 |
-| **API-коммуникация** | VK Bridge | 4.0.0 |
-| **Хранение данных** | VK Storage API | — |
-| **Хостинг** | VK Hosting | — |
-| **Сборка** | React Scripts | 5.0.1 |
----
+## Что реализовано
 
-## 📁 Структура проекта
-## 🚀 Установка и запуск
+- вход через Yandex SmartCaptcha;
+- serverless-проверка капчи в `api/verify-captcha.js` для Vercel;
+- добавление, редактирование, поиск и удаление учеников;
+- создание тарифов и выдача абонементов;
+- контроль оставшихся занятий, оплат и долгов;
+- расписание занятий с отметкой «проведено»;
+- dashboard со статистикой;
+- адаптивный дизайн для ноутбука и телефона;
+- бесплатное хранение через Supabase Free Tier;
+- demo-режим без ключей: данные сохраняются в `localStorage`, чтобы проект сразу запускался.
 
-### 1. Клонирование репозитория
+## Быстрый запуск
+
 ```bash
-git clone https://github.com/your-username/music-studio-crm.git
-cd music-studio-crm/client
-
-**2. Установка зависимостей**
-bash
 npm install
-
-**3. Запуск в режиме разработки**
-bash
 npm start
-Приложение откроется по адресу http://localhost:3000
+```
 
-**4. Сборка production-версии**b
-bash
-npm run build
-**5. Деплой на VK Hosting**
-bash
-npm run deploy
-🔧 Настройка деплоя
+Без переменных окружения приложение откроется в demo-режиме: вместо реальной капчи будет кнопка входа, а база будет храниться в браузере.
 
-**1. Создайте файл vk-hosting-config.json**
-json
-{
-  "static_path": "build",
-  "app_id": "ВАШ_ID_ПРИЛОЖЕНИЯ",
-  "endpoints": {
-    "mobile": "index.html",
-    "mvk": "index.html",
-    "web": "index.html"
-  }
-}
+## Переменные окружения
 
-**2. Добавьте скрипты в package.json**
-json
-"scripts": {
-  "start": "react-scripts start",
-  "build": "react-scripts build",
-  "predeploy": "npm run build",
-  "deploy": "vk-miniapps-deploy"
-}
+Скопируйте `.env.example` в `.env.local` для локального запуска или добавьте эти значения в Vercel/Netlify:
 
-**3. Деплой с сервисным ключом**
-bash
-npx vk-miniapps-deploy deploy ВАШ_СЕРВИСНЫЙ_КЛЮЧ --no-update-test-group
-📊 Архитектура
-text
-┌─────────────────────────────────────────────────────────────┐
-│                      VK MINI APP (Фронтенд)                 │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
-│  │   React     │  │    VKUI     │  │  VK Bridge  │         │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘         │
-└─────────┼────────────────┼────────────────┼────────────────┘
-          │                │                │
-          ▼                ▼                ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      API VK (Бесплатно)                     │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
-│  │  VK Auth    │  │ VK Storage  │  │ VK Hosting  │         │
-│  └─────────────┘  └─────────────┘  └─────────────┘         │
-└─────────────────────────────────────────────────────────────┘
-🗄️ Хранение данных (VK Storage)
+```env
+REACT_APP_YANDEX_CAPTCHA_SITE_KEY=public-site-key
+YANDEX_CAPTCHA_SECRET_KEY=server-secret-key
+REACT_APP_SUPABASE_URL=https://project.supabase.co
+REACT_APP_SUPABASE_ANON_KEY=anon-key
+REACT_APP_SUPABASE_TABLE=music_school_data
+```
 
-javascript
-// Загрузка данных
-const storageData = await bridge.send('VKWebAppStorageGet', {
-    keys: [`crm_clients_${userId}`, `crm_bookings_${userId}`]
-});
+`REACT_APP_YANDEX_CAPTCHA_SITE_KEY` — публичный ключ виджета.  
+`YANDEX_CAPTCHA_SECRET_KEY` — секретный ключ, хранится только на хостинге и используется serverless-функцией `/api/verify-captcha`.
 
-// Сохранение данных
-await bridge.send('VKWebAppStorageSet', { 
-    key: `crm_clients_${userId}`, 
-    value: JSON.stringify(clients) 
-});
+## Supabase Free: таблица базы данных
 
-📈 Статистика проекта
-Показатель	Значение
-Количество компонентов	8
-Объём кода	1 200+ строк
-UI-компонентов VKUI	20+
-API-вызовов VK Bridge	3 типа
-Хранилище	100 МБ на пользователя
-Платформы	iOS, Android, Web
+Создайте бесплатный проект на Supabase и выполните SQL в разделе **SQL Editor**:
 
-📝 Лицензия
-MIT License
+```sql
+create table if not exists public.music_school_data (
+  id text primary key,
+  data jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
 
-**👨‍💻 Автор**
-Филатов Тимур Денисович
+alter table public.music_school_data enable row level security;
 
-**Группа: 9/3-РПО-23/1-Ш**
+create policy "Allow anon read music school demo data"
+on public.music_school_data
+for select
+to anon
+using (true);
 
-**Специальность: 09.02.07 Информационные системы и программирование**
+create policy "Allow anon upsert music school demo data"
+on public.music_school_data
+for insert
+to anon
+with check (true);
 
-**🙏 Благодарности**
-Команде VK за отличную документацию VK Bridge и VKUI
+create policy "Allow anon update music school demo data"
+on public.music_school_data
+for update
+to anon
+using (true)
+with check (true);
+```
 
-Преподавателям колледжа "Академия ТОП" за ценные советы
+Для учебного проекта используется одна JSON-строка `id = 'default'`. Для реальной школы лучше добавить авторизацию и отдельные таблицы `students`, `plans`, `subscriptions`, `lessons`.
 
-🔗 Ссылка на приложение: https://vk.com/app54569233
+## Деплой не локально
+
+### Vercel, бесплатно
+
+1. Загрузите проект на GitHub.
+2. Создайте проект на [vercel.com](https://vercel.com) из репозитория.
+3. Build command: `npm run build`.
+4. Output directory: `build`.
+5. Добавьте переменные окружения из `.env.example`.
+6. Нажмите **Deploy**.
+
+`vercel.json` уже настроен для React SPA и serverless API.
+
+### Netlify, бесплатно
+
+Frontend можно развернуть на Netlify с теми же build settings. Для строгой серверной проверки SmartCaptcha на Netlify понадобится перенести `api/verify-captcha.js` в Netlify Functions или использовать Vercel для проекта целиком.
+
+## Скрипты
+
+```bash
+npm start   # локальная разработка
+npm test    # тесты
+npm run build # production-сборка
+```
+
+## Структура
+
+```text
+api/verify-captcha.js  # serverless-проверка Yandex SmartCaptcha
+src/App.js             # вся логика CRM
+src/App.css            # адаптивная стилизация
+.env.example           # шаблон переменных окружения
+vercel.json            # бесплатный деплой на Vercel
+```
