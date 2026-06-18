@@ -58,6 +58,18 @@ REACT_APP_SUPABASE_STATE_ID=music-school-demo
 
 ## Бесплатный деплой
 
+
+### GitHub Pages
+
+В проект добавлен workflow `.github/workflows/pages.yml`. После merge в `master` GitHub Actions соберет `npm run build` и опубликует статический сайт на GitHub Pages.
+
+1. В настройках репозитория откройте Settings → Pages.
+2. Source: `GitHub Actions`.
+3. При необходимости добавьте Repository variables с именами из `.env.example`.
+4. Запустите workflow вручную или сделайте push в `master`.
+
+Ожидаемый бесплатный адрес: `https://brok3ncore.github.io/client/`.
+
 ### Netlify
 
 1. Подключите репозиторий к Netlify.
